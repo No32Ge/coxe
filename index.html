@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coxe - Code Operations eXchange Environment</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- JSZip CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- pako CDN for gzip/tar.gz support -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
+
+    <!-- 顶部导航栏 -->
+    <header class="bg-white border-b border-slate-200 py-3.5 px-6 flex justify-between items-center shadow-sm">
+        <div class="flex items-center space-x-3">
+            <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+            <div>
+                <h1 class="text-lg font-bold tracking-tight text-slate-900">Coxe</h1>
+                <p class="text-xs text-slate-500">Code Operations eXchange Environment</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-3 text-xs">
+            <span id="stats-badge" class="bg-slate-100 text-slate-700 font-semibold px-2.5 py-1 rounded-full">0 个文件 | 0 KB</span>
+            <span class="text-slate-400">100% 浏览器本地运算</span>
+        </div>
+    </header>
+
+    <!-- 主工作区 -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 flex flex-col space-y-4">
+        
+        <!-- 文件载入与动作工具条 -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <div class="md:col-span-2 flex items-center justify-between border-2 border-dashed border-slate-200 rounded-lg p-3 hover:border-blue-400 transition cursor-pointer relative" id="drop-zone">
+                <input type="file" id="file-input" class="hidden">
+                <div class="flex items-center space-x-3">
+                    <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    <div class="text-left">
+                        <p class="text-xs font-semibold text-slate-700">拖拽或点击上传本地文件/压缩包（支持 .zip, .tar.gz, .tar 等）</p>
+                        <p class="text-[10px] text-slate-400">系统将依据 JSON 过滤规则，智能对内容执行提取或过滤</p>
+                    </div>
+                </div>
+                <div class="flex space-x-2">
+                    <button id="select-folder-btn" class="px-2.5 py-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded transition">
+                        📁 选择文件夹
+                    </button>
+                    <button id="reset-demo-btn" class="px-2.5 py-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded transition">
+                        🔄 重置内置案例
+                    </button>
+                </div>
+            </div>
+            <input type="file" id="folder-input" webkitdirectory class="hidden">
+            
+            <div class="flex flex-col justify-center space-y-2">
+                <button id="download-zip-btn" class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm flex items-center justify-center space-x-1.5 transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    <span>打包导出为新 ZIP 压缩包</span>
+                </button>
+                <button id="copy-ai-spec-btn" class="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-lg shadow-sm flex items-center justify-center space-x-1.5 transition">
+                    📋 一键复制 AI 修改指令规格书
+                </button>
+            </div>
+        </div>
+
+        <!-- 载入状态 -->
+        <div id="loading-status" class="hidden flex items-center justify-center space-x-2 text-blue-600 font-medium py-10">
+            <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span class="text-sm">本地解压中，请稍候...</span>
+        </div>
+
+        <!-- 主要展示区域 -->
+        <div id="workspace" class="hidden flex-1 flex flex-col space-y-4">
+            
+            <!-- 切换选项卡 -->
+            <div class="flex border-b border-slate-200">
+                <button id="tab-tree-btn" class="py-2.5 px-5 font-semibold text-xs border-b-2 border-blue-600 text-blue-600 focus:outline-none transition">
+                    📂 目录树查看器
+                </button>
+                <button id="tab-string-btn" class="py-2.5 px-5 font-semibold text-xs border-b-2 border-transparent text-slate-500 hover:text-slate-700 focus:outline-none transition">
+                    🤖 AI 字符串源数据 (复制给 AI)
+                </button>
+                <button id="tab-xml-btn" class="py-2.5 px-5 font-semibold text-xs border-b-2 border-transparent text-slate-500 hover:text-slate-700 focus:outline-none transition">
+                    ⚡ XML 动作指令执行器
+                </button>
+            </div>
+
+            <!-- 1. 目录树视图 -->
+            <div id="tree-view" class="grid grid-cols-1 md:grid-cols-3 gap-4 min-h-[480px]">
+                <!-- 左：目录树 -->
+                <div class="border border-slate-200 bg-white rounded-lg p-4 overflow-y-auto max-h-[600px] shadow-sm flex flex-col">
+                    <div class="mb-3 space-y-2">
+                        <input type="text" id="file-search" placeholder="检索文件名..." class="w-full text-xs px-2.5 py-1.5 border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <div class="flex items-center space-x-3 text-[10px] text-slate-500 px-1">
+                            <label class="flex items-center space-x-1 cursor-pointer">
+                                <input type="checkbox" id="search-content-chk" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                                <span>🔍 检索代码内容</span>
+                            </label>
+                        </div>
+                        <div id="add-file-container" class="relative">
+                            <div id="add-file-idle" class="flex items-center space-x-1">
+                                <button id="add-file-btn" class="px-2 py-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full transition flex items-center justify-center w-7 h-7 font-bold" title="新建文件或文件夹">+</button>
+                            </div>
+                            <div id="add-file-input-wrapper" class="hidden">
+                                <input type="text" id="add-file-input" class="w-full text-xs px-2 py-1 border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="如 src/index.js 或 src/">
+                            </div>
+                        </div>
+                    </div>
+                    <div id="tree-root" class="text-sm flex-1 overflow-y-auto"></div>
+                </div>
+                <!-- 右：带有行号的 IDE 预览窗口 -->
+                <div class="md:col-span-2 border border-slate-200 bg-white rounded-lg flex flex-col overflow-hidden max-h-[600px] shadow-sm">
+                    <div class="bg-slate-50 px-4 py-2 border-b border-slate-200 flex justify-between items-center">
+                        <span id="current-file-name" class="font-mono text-xs text-slate-600 truncate max-w-xs md:max-w-md">package.json</span>
+                        <div class="flex items-center space-x-2">
+                            <button id="preview-html-btn" class="hidden px-2.5 py-1 text-[10px] bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded shadow-xs text-blue-700 font-semibold transition">🌐 运行预览</button>
+                            <button id="download-html-btn" class="hidden px-2.5 py-1 text-[10px] bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded shadow-xs text-emerald-700 font-semibold transition">📥 编译下载</button>
+                            <button id="rename-file-btn" class="px-2.5 py-1 text-[10px] bg-white hover:bg-slate-50 border border-slate-300 rounded shadow-xs text-slate-700 font-semibold transition">🏷️ 重命名/移动</button>
+                            <button id="edit-file-btn" class="px-2.5 py-1 text-[10px] bg-white hover:bg-slate-50 border border-slate-300 rounded shadow-xs text-slate-700 font-semibold transition">✏️ 编辑</button>
+                            <button id="save-file-btn" class="hidden px-2.5 py-1 text-[10px] bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded shadow-xs text-emerald-700 font-semibold transition">💾 保存</button>
+                            <button id="cancel-edit-btn" class="hidden px-2.5 py-1 text-[10px] bg-white hover:bg-slate-50 border border-slate-300 rounded shadow-xs text-slate-700 font-semibold transition">取消</button>
+                            <button id="copy-file-content" class="px-2.5 py-1 text-[10px] bg-white hover:bg-slate-50 border border-slate-300 rounded shadow-xs text-slate-700 font-semibold transition">复制单文件</button>
+                        </div>
+                    </div>
+                    <div class="flex-1 overflow-auto bg-slate-900 py-3 px-2" id="code-scroll-container">
+                        <!-- 行号与内容装载器，使用 table 确保同步滚动 -->
+                        <table id="code-view-table" class="w-full border-collapse">
+                            <tbody>
+                                <tr class="align-top">
+                                    <td id="line-numbers" class="w-10 text-right pr-3 select-none text-slate-500 border-r border-slate-800 font-mono text-xs whitespace-pre leading-normal"></td>
+                                    <td class="pl-4">
+                                        <pre class="text-slate-200 font-mono text-xs whitespace-pre leading-normal m-0" id="current-file-content"></pre>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <!-- 编辑模式专用 textarea -->
+                        <textarea id="edit-textarea" class="hidden w-full h-full bg-slate-950 text-slate-200 font-mono text-xs p-2 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none leading-normal" spellcheck="false"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. AI 字符串视图（带局部 JSON 过滤器模块） -->
+            <div id="string-view" class="hidden flex flex-col space-y-4">
+                <!-- 第一行：复制工具与操作引导 -->
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between bg-blue-50/50 border border-blue-100 rounded-lg p-4 gap-4">
+                    <div class="text-xs text-slate-600 leading-normal max-w-2xl">
+                        <strong>💡 拓扑结构说明</strong>：
+                        被下方规则过滤命中的文件（如音频、非文本大文件、`node_modules`）**仍旧会出现在下方 XML 输出的大纲内**（带有 <code class="bg-slate-200 px-1 py-0.5 rounded">status="omitted"</code> 声明），使得 AI 能够理解整个工作区的完整依赖深度，而不会由于缺失相关文件产生误判。
+                    </div>
+                    <button id="copy-all-btn" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow transition duration-150 flex-shrink-0 self-start lg:self-center">
+                        <span id="copy-all-text">📋 复制大纲与全部文件</span>
+                    </button>
+                </div>
+
+                <!-- 核心：左侧过滤器配置，右侧 XML 导出区域 -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <!-- 过滤配置 JSON 模块 -->
+                    <div class="border border-slate-200 bg-white rounded-lg p-4 flex flex-col space-y-3 shadow-sm h-full">
+                        <div class="flex justify-between items-center border-b border-slate-100 pb-2">
+                            <h3 class="font-bold text-xs text-slate-700">⚙️ 忽略与过滤规则配置 (JSON)</h3>
+                            <button id="save-config-btn" class="px-2.5 py-1 text-[10px] bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 rounded font-bold transition">
+                                保存配置并刷新
+                            </button>
+                        </div>
+                        <p class="text-[10px] text-slate-400 leading-normal">
+                            规则保存后持久化于浏览器 LocalStorage。支持设置版本限制以及开启本地固化存储。
+                        </p>
+                        <textarea id="config-textarea" class="w-full flex-1 min-h-[340px] p-2 bg-slate-950 text-pink-400 font-mono text-[11px] rounded focus:outline-none focus:ring-1 focus:ring-blue-500 leading-relaxed" placeholder="规则正在装载..."></textarea>
+                    </div>
+
+                    <!-- 导出内容展现 -->
+                    <div class="lg:col-span-2 border border-slate-200 rounded-lg overflow-hidden bg-slate-900 text-slate-100 font-mono text-xs flex flex-col shadow-sm">
+                        <div class="bg-slate-800/80 px-4 py-2 border-b border-slate-700 text-[10px] text-slate-400 flex justify-between items-center">
+                            <span>XML 导出版数据预览</span>
+                            <span id="omitted-counter" class="text-amber-400">已忽略：0 个大文件内容</span>
+                            <span id="hidden-folder-counter" class="text-red-400 ml-3">🙈 AI视图已屏蔽：0 个文件</span>
+                        </div>
+                        <textarea id="string-content" readonly class="w-full h-[370px] p-4 bg-slate-900 text-slate-100 focus:outline-none resize-none font-mono leading-relaxed"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. XML 指令执行器 -->
+            <div id="xml-view" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4 min-h-[480px]">
+                <!-- 左：动作写入 -->
+                <div class="border border-slate-200 bg-white rounded-lg p-4 flex flex-col space-y-3 shadow-sm">
+                    <div class="flex justify-between items-center">
+                        <h3 class="font-bold text-xs text-slate-700">将 AI 的 XML 动作输出粘贴于下方：</h3>
+                        <button id="load-example-btn" class="px-2 py-1 text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition font-bold">载入复杂 XML 案例</button>
+                    </div>
+                    <textarea id="xml-input" class="flex-1 w-full p-3 bg-slate-950 text-emerald-400 font-mono text-xs rounded-lg focus:ring-1 focus:ring-blue-500 focus:outline-none leading-relaxed min-h-[300px]" placeholder="在此贴入大语言模型输出的 <file> 标签命令内容..."></textarea>
+                    <button id="execute-xml-btn" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs shadow-sm transition duration-150">
+                        ⚡ 执行 XML 增删改动作
+                    </button>
+                </div>
+                
+                <!-- 右：事件日志 + 历史时间线联排控制 -->
+                <div class="flex flex-col space-y-4 max-h-[600px] overflow-hidden">
+                    <!-- 上半部：事件日志 -->
+                    <div class="border border-slate-200 bg-white rounded-lg p-4 flex flex-col flex-1 min-h-[220px] shadow-sm overflow-hidden">
+                        <div class="flex justify-between items-center mb-2 border-b border-slate-100 pb-2">
+                            <h3 class="font-bold text-xs text-slate-700">本地编译器事件日志</h3>
+                            <button id="clear-logs-btn" class="text-[10px] text-slate-400 hover:text-slate-600 font-medium">清空控制台</button>
+                        </div>
+                        <div id="log-output" class="flex-1 bg-slate-950 text-slate-300 p-3 rounded-lg font-mono text-[11px] overflow-auto space-y-2 leading-relaxed">
+                            <div class="text-slate-500">&gt; 控制台就绪。请从左侧提交 XML 命令修改虚拟本地工程。</div>
+                        </div>
+                    </div>
+                    
+                    <!-- 下半部：历史时间线回滚栏 -->
+                    <div class="border border-slate-200 bg-white rounded-lg p-4 flex flex-col h-[280px] shadow-sm overflow-hidden">
+                        <div class="flex justify-between items-center mb-2 border-b border-slate-100 pb-2">
+                            <h3 class="font-bold text-xs text-slate-700 flex items-center space-x-1">
+                                <span>🕒 历史快照与防崩坏回滚</span>
+                            </h3>
+                            <div class="flex items-center space-x-1.5">
+                                <button id="view-graph-btn" class="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-bold rounded border border-blue-200 transition" title="展开全屏全局版本控制立体图">📊 全局立体图</button>
+                                <span id="history-counter" class="text-[10px] text-slate-400">0 / 10 状态</span>
+                            </div>
+                        </div>
+                        <div id="timeline-output" class="flex-1 overflow-y-auto space-y-2 pr-1">
+                            <!-- 时间线快照卡片 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- AI 提示词规范系统模态框（内部标签实体化，阻断解析逃逸） -->
+    <textarea id="ai-spec-template" class="hidden">你是一个高级软件重构与代码修改专家。现在我向你发送了整个项目的源文件架构和内容，并以 XML 进行封装。
+
+有些极其庞大的依赖库（如 node_modules/）或大型媒体资源在系统内带有 [status="omitted"] 标识，其具体内容因为节省上下文开销而被系统省略了，你一只需了解这些文件的存在而不要去重写它。
+
+当你需要对我提供给你的文件系统进行创建、修改、重构或删除时，请不要进行任何闲聊或大篇幅解释，请【严格】遵循并直接输出以下规范对应的 XML 代码块：
+
+1. 创建新文件 或 强行完全重写现有文件 (action="create")：
+&lt;file action="create" name="文件相对路径"&gt;
+新文件的完整代码/文本内容
+&lt;/file&gt;
+
+2. 精准局部修改现有文件 (action="pitch")：
+为了避免全文件写出的开销，特别是对于大代码文件，请使用 action="pitch"，并通过一个或多个 SEARCH/REPLACE 块精确定位修改。
+* SEARCH 块必须是原文件中真实存在的、完全相同的连续多行，请保持精确缩进。
+* REPLACE 块是你想要对该片段修改后的新代码。
+&lt;file action="pitch" name="文件相对路径"&gt;
+&lt;<<<<<< SEARCH
+[原代码中原封不动的需要被修改的旧片段，必须极其精确地对应，包含缩进]
+=======
+[用于替换上述旧片段的新代码]
+&gt;&gt;&gt;&gt;&gt;&gt;&gt; REPLACE
+&lt;/file&gt;
+* 可以在一个 &lt;file action="pitch"&gt; 中连续放置多对 SEARCH/REPLACE 块来进行多次修补。
+
+3. 删除现有文件 (action="delete")：
+&lt;file action="delete" name="文件相对路径"&gt;&lt;/file&gt;
+
+4. 重命名文件 (action="rename")：
+&lt;file action="rename" name="原路径" to="新路径"&gt;&lt;/file&gt;
+
+5. 移动文件 (action="move")：
+&lt;file action="move" name="原路径" to="目标路径（含文件名）"&gt;&lt;/file&gt;
+
+6. 复制文件 (action="copy")：
+&lt;file action="copy" name="源路径" to="目标路径（含文件名）"&gt;&lt;/file&gt;
+
+请注意：
+- 严格遵循 &lt;file name="..." action="..."&gt; 属性命名。
+- 在 &lt;file&gt; 代码内部直接编写原始代码即可，无需对 HTML 标签或 XML 控制字符（如 &amp;lt; 和 &amp;gt;）进行转义实体编码，系统会自动采用高兼容性正则进行解析。</textarea>
+
+    <!-- 全局版本控制立体图模态框 -->
+    <div id="graph-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs hidden">
+        <div class="bg-white rounded-xl shadow-2xl w-11/12 h-5/6 max-w-5xl flex flex-col overflow-hidden border border-slate-200">
+            <div class="bg-slate-50 px-5 py-3 border-b border-slate-200 flex justify-between items-center">
+                <div>
+                    <h2 class="font-bold text-sm text-slate-900 flex items-center space-x-1.5">
+                        <span>📊 全局版本控制立体图</span>
+                    </h2>
+                    <p class="text-[10px] text-slate-400 mt-0.5">多分支非线性版本历史。支持鼠标拖动平移、滚轮缩放，点击节点即可安全回退。</p>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <!-- 快速操作工具条 -->
+                    <div class="flex items-center bg-white border border-slate-200 rounded-lg shadow-xs p-0.5 space-x-1 mr-4">
+                        <button id="graph-zoom-in-btn" class="p-1 text-slate-500 hover:text-blue-600 hover:bg-slate-50 rounded transition" title="放大">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        </button>
+                        <button id="graph-zoom-out-btn" class="p-1 text-slate-500 hover:text-blue-600 hover:bg-slate-50 rounded transition" title="缩小">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path></svg>
+                        </button>
+                        <span class="text-[10px] text-slate-400 px-1 font-mono select-none border-l border-r border-slate-100" id="graph-scale-indicator">100%</span>
+                        <button id="graph-zoom-reset-btn" class="px-2 py-1 text-[10px] text-slate-600 hover:text-blue-600 hover:bg-slate-50 rounded font-semibold transition" title="自适应居中">
+                            🎯 居中复位
+                        </button>
+                    </div>
+                    <button id="close-graph-btn" class="p-1 text-slate-400 hover:text-slate-600 focus:outline-none">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="flex-1 bg-slate-50 overflow-hidden relative" id="graph-canvas-container">
+                <div class="absolute bottom-4 right-4 bg-slate-900/80 text-white text-[10px] px-2 py-1 rounded-md pointer-events-none select-none z-10 backdrop-blur-xs">
+                    🖱️ 拖拽平移 | 滚轮缩放 | 点击回滚
+                </div>
+                <svg id="version-svg" class="w-full h-full block cursor-grab active:cursor-grabbing"></svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- 导出文件选择模态框 -->
+    <div id="export-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs hidden">
+        <div class="bg-white rounded-xl shadow-2xl w-11/12 max-w-2xl max-h-[80vh] flex flex-col overflow-hidden border border-slate-200">
+            <div class="bg-slate-50 px-5 py-3 border-b border-slate-200 flex justify-between items-center">
+                <div>
+                    <h2 class="font-bold text-sm text-slate-900">📦 选择要导出的文件</h2>
+                    <p class="text-[10px] text-slate-400 mt-0.5">勾选文件夹将自动包含其下所有文件。</p>
+                </div>
+                <button id="export-cancel-btn" class="p-1 text-slate-400 hover:text-slate-600 focus:outline-none">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="flex items-center justify-between px-5 py-2 bg-white border-b border-slate-100 space-x-2">
+                <div class="flex items-center space-x-2">
+                    <button id="export-select-all" class="px-2 py-1 text-[10px] bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded text-blue-700 font-semibold transition">全选</button>
+                    <button id="export-deselect-all" class="px-2 py-1 text-[10px] bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-slate-600 font-semibold transition">取消全选</button>
+                </div>
+                <div class="flex items-center space-x-2 text-xs">
+                    <label class="text-slate-500">文件名：</label>
+                    <input type="text" id="export-file-name" class="px-2 py-1 border border-slate-300 rounded text-xs w-56 focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="workspace_hash.zip">
+                </div>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4 bg-white" id="export-tree-container">
+                <!-- 动态渲染文件树 -->
+            </div>
+            <div class="bg-slate-50 px-5 py-3 border-t border-slate-200 flex justify-end">
+                <button id="export-confirm-btn" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm transition">确认导出 ZIP</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 自定义输入模态框（创建文件/文件夹等） -->
+    <div id="input-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs hidden">
+        <div class="bg-white rounded-xl shadow-2xl w-11/12 max-w-md flex flex-col overflow-hidden border border-slate-200">
+            <div class="bg-slate-50 px-5 py-3 border-b border-slate-200 flex justify-between items-center">
+                <h2 id="input-modal-title" class="font-bold text-sm text-slate-900">新建文件</h2>
+                <button id="input-modal-cancel" class="p-1 text-slate-400 hover:text-slate-600 focus:outline-none">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-5 space-y-3">
+                <input type="text" id="input-modal-field" class="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="请输入路径...">
+                <div class="flex justify-end space-x-2">
+                    <button id="input-modal-cancel-btn" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition">取消</button>
+                    <button id="input-modal-confirm-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-sm transition">确认</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 顺序加载模块化脚本（无 CORS 跨域限制，保障纯本地双击直接执行） -->
+    <script src="js/demo-files.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/patcher.js"></script>
+    <script src="js/history.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
