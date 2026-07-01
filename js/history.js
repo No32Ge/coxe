@@ -133,8 +133,9 @@ window.HistoryManager = {
                 <div class="mt-1 flex-shrink-0 w-2 h-2 rounded-full ${isActive ? 'bg-blue-600 ring-4 ring-blue-100' : 'bg-slate-400'}"></div>
                 <div class="flex-1 min-w-0">
                     <div class="flex justify-between items-center">
-                        <span class="text-slate-800 truncate block font-medium">${item.label}</span>
-                        <span class="text-slate-400 font-mono flex-shrink-0 ml-2">${timeStr}</span>
+                        <span class="text-slate-800 truncate block font-medium flex-1 pr-1" title="${item.label}">${item.label}</span>
+                        <button class="edit-memo-btn text-slate-400 hover:text-blue-600 px-1 mr-1 transition-colors" title="修改备注" data-id="${item.id}">✏️</button>
+                        <span class="text-slate-400 font-mono flex-shrink-0">${timeStr}</span>
                     </div>
                     <div class="text-[10px] text-slate-500 mt-1 flex justify-between items-center">
                         <div class="flex items-center space-x-1 min-w-0">
@@ -146,6 +147,26 @@ window.HistoryManager = {
                     </div>
                 </div>
             `;
+
+            const editMemoBtn = itemDiv.querySelector('.edit-memo-btn');
+            if (editMemoBtn) {
+                editMemoBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation(); // 阻止触发版本回滚事件
+                    const currentLabel = item.label;
+                    const newLabel = await window.showInputModal("修改版本快照备注", "请输入此版本的修改备注/更新记录", currentLabel);
+                    if (newLabel !== null && newLabel.trim() !== '') {
+                        item.label = newLabel.trim();
+                        this.saveCurrentStateToStorage();
+                        this.renderTimeline();
+                        // 动态联动刷新立体分支图
+                        const graphModal = document.getElementById('graph-modal');
+                        if (graphModal && !graphModal.classList.contains('hidden')) {
+                            this.renderVersionGraph();
+                        }
+                        window.addConsoleLog("SYSTEM", null, `成功修改快照备注为: "${item.label}"`, "success");
+                    }
+                });
+            }
 
             itemDiv.addEventListener('click', () => {
                 this.rollbackTo(item.id);
