@@ -556,18 +556,19 @@ window.HistoryManager = {
     },
 
     saveCurrentStateToStorage: function() {
+        const projId = window.getCurrentProjectId();
         if (window.hideConfig.enableLocalStorage === false) {
-            localStorage.removeItem('workspace_files');
-            localStorage.removeItem('workspace_history_list');
-            localStorage.removeItem('workspace_active_history_id');
-            localStorage.removeItem('workspace_object_database');
+            localStorage.removeItem(`workspace_project_files_${projId}`);
+            localStorage.removeItem(`workspace_project_history_list_${projId}`);
+            localStorage.removeItem(`workspace_project_active_history_id_${projId}`);
+            localStorage.removeItem(`workspace_project_object_database_${projId}`);
             return;
         }
         try {
-            localStorage.setItem('workspace_files', JSON.stringify(window.parsedFiles));
-            localStorage.setItem('workspace_history_list', JSON.stringify(this.historyList));
-            localStorage.setItem('workspace_active_history_id', JSON.stringify(this.activeHistoryId));
-            localStorage.setItem('workspace_object_database', JSON.stringify(this.objectDatabase));
+            localStorage.setItem(`workspace_project_files_${projId}`, JSON.stringify(window.parsedFiles));
+            localStorage.setItem(`workspace_project_history_list_${projId}`, JSON.stringify(this.historyList));
+            localStorage.setItem(`workspace_project_active_history_id_${projId}`, JSON.stringify(this.activeHistoryId));
+            localStorage.setItem(`workspace_project_object_database_${projId}`, JSON.stringify(this.objectDatabase));
         } catch (e) {
             console.warn("LocalStorage 容量超限，部分历史快照与代码可能无法持久化缓存:", e);
         }

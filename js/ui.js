@@ -16,7 +16,7 @@ window.copyToClipboard = function(text) {
                 textarea.style.left = '-9999px';
                 document.body.appendChild(textarea);
                 textarea.select();
-                textarea.setSelectionRange(0, 99999); // 适配移动端
+                textarea.setSelectionRange(0, text.length); // 动态计算长度，支持超长文件复制
                 const success = document.execCommand('copy');
                 document.body.removeChild(textarea);
                 if (success) {

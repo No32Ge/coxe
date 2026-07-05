@@ -4,24 +4,53 @@
 window.Patcher = {
     parseXmlActions: function(xmlStr) {
         // 使用字符串拼接动态构建正则，阻止被上级 XML 解析器错误捕捉
-        const fileTagRegex = new RegExp('<' + 'file\\s+([^>]*?)>([\\s\\S]*?)<' + '/file>', 'g');
+        const tagRegex = new RegExp('<' + 'file\\s+([^>]*?)>|<' + '/file>', 'gi');
         let match;
+        const tags = [];
         const operations = [];
         
-        while ((match = fileTagRegex.exec(xmlStr)) !== null) {
-            const attrString = match[1];
-            const content = match[2];
-            
-            const nameMatch = attrString.match(/name\s*=\s*["']([^"']+)["']/);
-            const actionMatch = attrString.match(/action\s*=\s*["']([^"']+)["']/);
-            const toMatch = attrString.match(/to\s*=\s*["']([^"']+)["']/);
-            
-            const name = nameMatch ? nameMatch[1] : null;
-            const action = actionMatch ? actionMatch[1].toLowerCase() : "create";
-            const to = toMatch ? toMatch[1] : null;
-            
-            if (name) {
-                operations.push({ action, name, content, to });
+        while ((match = tagRegex.exec(xmlStr)) !== null) {
+            const isClose = match[0].startsWith('</') || match[0].startsWith('</');
+            tags.push({
+                index: match.index,
+                length: match[0].length,
+                isClose: isClose,
+                attrs: match[1] || null
+            });
+        }
+
+        let stackDepth = 0;
+        let outerStartIndex = -1;
+        let outerAttrs = null;
+
+        for (let i = 0; i < tags.length; i++) {
+            const tag = tags[i];
+            if (!tag.isClose) {
+                if (stackDepth === 0) {
+                    outerStartIndex = tag.index + tag.length;
+                    outerAttrs = tag.attrs;
+                }
+                stackDepth++;
+            } else {
+                if (stackDepth > 0) {
+                    stackDepth--;
+                    if (stackDepth === 0) {
+                        const content = xmlStr.substring(outerStartIndex, tag.index);
+                        const attrString = outerAttrs || "";
+                        
+                        const nameMatch = attrString.match(/name\s*=\s*["']([^"']+)["']/);
+                        const actionMatch = attrString.match(/action\s*=\s*["']([^"']+)["']/);
+                        const toMatch = attrString.match(/to\s*=\s*["']([^"']+)["']/);
+                        
+                        const name = nameMatch ? nameMatch[1] : null;
+                        const action = actionMatch ? actionMatch[1].toLowerCase() : "create";
+                        const to = toMatch ? toMatch[1] : null;
+                        
+                        if (name) {
+                            operations.push({ action, name, content, to });
+                        }
+                    }
+                }
             }
         }
         return operations;
